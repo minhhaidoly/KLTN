@@ -249,3 +249,102 @@ function Login({ setIsAuthenticated }) {
 }
 
 export default Login;
+
+// import React, { useState } from 'react';
+// import { useNavigate } from 'react-router-dom';
+// import axios from 'axios';
+
+// function Login({ setIsAuthenticated }) {
+//   const [formData, setFormData] = useState({
+//     username: '',
+//     password: '',
+//     role: 'Sinh viên'
+//   });
+//   const [loading, setLoading] = useState(false);
+//   const [error, setError] = useState('');
+  
+//   const navigate = useNavigate();
+
+//   const handleInputChange = (e) => {
+//     setFormData({
+//       ...formData,
+//       [e.target.name]: e.target.value
+//     });
+//   };
+
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+//     setLoading(true);
+//     setError('');
+
+//     try {
+//       const response = await axios.post('http://localhost:5000/login', formData, {
+//         withCredentials: true
+//       });
+
+//       if (response.status === 200) {
+//         // Lưu thông tin user vào localStorage
+//         localStorage.setItem('user', JSON.stringify(response.data.user));
+//         setIsAuthenticated(true);
+//         navigate('/dashboard');
+//       }
+//     } catch (err) {
+//       console.error('Login error:', err);
+//       setError(err.response?.data?.message || 'Đăng nhập thất bại');
+//     }
+    
+//     setLoading(false);
+//   };
+
+//   return (
+//     <div className="login-container">
+//       <form onSubmit={handleSubmit}>
+//         <h2>Đăng nhập</h2>
+        
+//         {error && <div className="error-message">{error}</div>}
+        
+//         <div className="form-group">
+//           <label>Tên đăng nhập:</label>
+//           <input
+//             type="text"
+//             name="username"
+//             value={formData.username}
+//             onChange={handleInputChange}
+//             required
+//           />
+//         </div>
+
+//         <div className="form-group">
+//           <label>Mật khẩu:</label>
+//           <input
+//             type="password"
+//             name="password"
+//             value={formData.password}
+//             onChange={handleInputChange}
+//             required
+//           />
+//         </div>
+
+//         <div className="form-group">
+//           <label>Vai trò:</label>
+//           <select
+//             name="role"
+//             value={formData.role}
+//             onChange={handleInputChange}
+//             required
+//           >
+//             <option value="Sinh viên">Sinh viên</option>
+//             <option value="Giảng viên">Giảng viên</option>
+//             <option value="Quản trị viên">Quản trị viên</option>
+//           </select>
+//         </div>
+
+//         <button type="submit" disabled={loading}>
+//           {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+//         </button>
+//       </form>
+//     </div>
+//   );
+// }
+
+// export default Login;
