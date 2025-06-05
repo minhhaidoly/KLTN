@@ -126,7 +126,7 @@ function ProposeTopic() {
           <ListItem button onClick={() => navigate('/profile')}>
             <ListItemText primary="Account" />
           </ListItem>
-          {(user.role === 'Quản trị viên' || user.role === 'Giảng viên') && (
+          {(user.role === 'Quản trị viên' || user.role === 'Giảng viên' || user.role === 'Chủ nhiệm bộ môn') && (
             <ListItem button onClick={() => navigate('/batches')}>
               <ListItemText primary="Danh sách học viên" />
             </ListItem>
@@ -135,6 +135,9 @@ function ProposeTopic() {
             <>
               <ListItem button onClick={() => navigate('/upload')}>
                 <ListItemText primary="Tải lên danh sách" />
+              </ListItem>
+              <ListItem button onClick={() => navigate('/upload-heads')}>
+                <ListItemText primary="Tải lên CNBM" />
               </ListItem>
               <ListItem button onClick={() => navigate('/topic-proposals')}>
                 <ListItemText primary="Đề tài chưa được phê duyệt" />
@@ -149,6 +152,11 @@ function ProposeTopic() {
           {user.role === 'Giảng viên' && (
             <ListItem button onClick={() => navigate('/topics')}>
               <ListItemText primary="Đề xuất từ học viên" />
+            </ListItem>
+          )}
+          {user.role === 'Chủ nhiệm bộ môn' && (
+            <ListItem button onClick={() => navigate('/head/topics')}>
+              <ListItemText primary="Đề tài chờ phê duyệt" />
             </ListItem>
           )}
           <ListItem button onClick={() => navigate('/calendar')}>

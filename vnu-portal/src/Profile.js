@@ -129,56 +129,64 @@ function Profile() {
                     />
                 </Box>
                 <List>
-                    <ListItem button onClick={() => navigate('/dashboard')}>
-                        <ListItemText primary="Dashboard" />
-                    </ListItem>
-                    <ListItem button onClick={() => navigate('/profile')}>
-                        <ListItemText primary="Account" />
-                    </ListItem>
-                    {(user.role === 'Quản trị viên' || user.role === 'Giảng viên') && (
-                        <ListItem button onClick={() => navigate('/batches')}>
-                            <ListItemText primary="Danh sách học viên" />
-                        </ListItem>
-                    )}
-                    {user.role === 'Quản trị viên' && (
-                        <>
-                            <ListItem button onClick={() => navigate('/upload')}>
+                          <ListItem button onClick={() => navigate('/dashboard')}>
+                            <ListItemText primary="Dashboard" />
+                          </ListItem>
+                          <ListItem button onClick={() => navigate('/profile')}>
+                            <ListItemText primary="Account" />
+                          </ListItem>
+                          {(user.role === 'Quản trị viên' || user.role === 'Giảng viên' || user.role === 'Chủ nhiệm bộ môn') && (
+                            <ListItem button onClick={() => navigate('/batches')}>
+                              <ListItemText primary="Danh sách học viên" />
+                            </ListItem>
+                          )}
+                          {user.role === 'Quản trị viên' && (
+                            <>
+                              <ListItem button onClick={() => navigate('/upload')}>
                                 <ListItemText primary="Tải lên danh sách" />
-                            </ListItem>
-                            <ListItem button onClick={() => navigate('/topic-proposals')}>
+                              </ListItem>
+                              <ListItem button onClick={() => navigate('/upload-heads')}>
+                                <ListItemText primary="Tải lên CNBM" />
+                              </ListItem>
+                              <ListItem button onClick={() => navigate('/topic-proposals')}>
                                 <ListItemText primary="Đề tài chưa được phê duyệt" />
+                              </ListItem>
+                            </>
+                          )}
+                          {user.role === 'Sinh viên' && (
+                            <ListItem button onClick={() => navigate('/propose-topic')}>
+                              <ListItemText primary="Đề xuất đề cương" />
                             </ListItem>
-                        </>
-                    )}
-                    {user.role === 'Sinh viên' && (
-                        <ListItem button onClick={() => navigate('/propose-topic')}>
-                            <ListItemText primary="Đề xuất đề cương" />
-                        </ListItem>
-                    )}
-                    {user.role === 'Giảng viên' && (
-                        <ListItem button onClick={() => navigate('/topics')}>
-                            <ListItemText primary="Đề xuất từ học viên" />
-                        </ListItem>
-                    )}
-                    <ListItem button onClick={() => navigate('/calendar')}>
-                        <ListItemText primary="Calendar" />
-                    </ListItem>
-                    <ListItem button onClick={() => navigate('/settings')}>
-                        <ListItemText primary="Setting" />
-                    </ListItem>
-                    <ListItem button onClick={() => navigate('/help')}>
-                        <ListItemText primary="Help" />
-                    </ListItem>
-                    <ListItem button onClick={() => navigate('/about')}>
-                        <ListItemText primary="Introduction" />
-                    </ListItem>
-                    <ListItem button onClick={() => navigate('/contact')}>
-                        <ListItemText primary="Contact" />
-                    </ListItem>
-                    <ListItem button onClick={handleLogout}>
-                        <ListItemText primary="Logout" />
-                    </ListItem>
-                </List>
+                          )}
+                          {user.role === 'Giảng viên' && (
+                            <ListItem button onClick={() => navigate('/topics')}>
+                              <ListItemText primary="Đề xuất từ học viên" />
+                            </ListItem>
+                          )}
+                          {user.role === 'Chủ nhiệm bộ môn' && (
+                            <ListItem button onClick={() => navigate('/head/topics')}>
+                              <ListItemText primary="Đề tài chờ phê duyệt" />
+                            </ListItem>
+                          )}
+                          <ListItem button onClick={() => navigate('/calendar')}>
+                            <ListItemText primary="Calendar" />
+                          </ListItem>
+                          <ListItem button onClick={() => navigate('/settings')}>
+                            <ListItemText primary="Setting" />
+                          </ListItem>
+                          <ListItem button onClick={() => navigate('/help')}>
+                            <ListItemText primary="Help" />
+                          </ListItem>
+                          <ListItem button onClick={() => navigate('/about')}>
+                            <ListItemText primary="Introduction" />
+                          </ListItem>
+                          <ListItem button onClick={() => navigate('/contact')}>
+                            <ListItemText primary="Contact" />
+                          </ListItem>
+                          <ListItem button onClick={handleLogout}>
+                            <ListItemText primary="Logout" />
+                          </ListItem>
+                        </List>              
             </Drawer>
             <div className="dashboard-content">
                 {renderProfileContent()}

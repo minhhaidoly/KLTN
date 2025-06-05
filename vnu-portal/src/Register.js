@@ -57,9 +57,10 @@ function Register() {
           <div className="input-group">
             <label>Vai trò</label>
             <select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="Học viên">Học viên</option>
+              <option value="Sinh viên">Sinh viên</option>
               <option value="Giảng viên">Giảng viên</option>
               <option value="Quản trị viên">Quản trị viên</option>
+              <option value="Chủ nhiệm bộ môn">Chủ nhiệm bộ môn</option>
             </select>
           </div>
           <button type="submit">ĐĂNG KÝ</button>
