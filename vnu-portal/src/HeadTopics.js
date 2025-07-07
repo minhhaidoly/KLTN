@@ -5,6 +5,12 @@ import {
   DialogActions, TextField, Alert, Drawer, List, ListItem, ListItemText
 } from '@mui/material';
 import logo from './logo.png';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import GroupIcon from '@mui/icons-material/Group';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import SettingsIcon from '@mui/icons-material/Settings';
 
 function HeadTopics() {
   const [proposals, setProposals] = useState([]);
@@ -76,16 +82,24 @@ function HeadTopics() {
         </Box>
         <List>
           <ListItem button onClick={() => navigate('/dashboard')}>
+            <DashboardIcon sx={{ mr: 1 }} />
             <ListItemText primary="Dashboard" />
           </ListItem>
           <ListItem button onClick={() => navigate('/profile')}>
+            <AccountCircleIcon sx={{ mr: 1 }} />
             <ListItemText primary="Account" />
           </ListItem>
           <ListItem button onClick={() => navigate('/batches')}>
+            <GroupIcon sx={{ mr: 1 }} />
             <ListItemText primary="Danh sách học viên" />
           </ListItem>
-          <ListItem button onClick={() => navigate('/head/topics')}>
-            <ListItemText primary="Đề tài chờ phê duyệt" />
+          <ListItem button onClick={() => navigate('/upload')}>
+            <UploadFileIcon sx={{ mr: 1 }} />
+            <ListItemText primary="Tải lên danh sách" />
+          </ListItem>
+          <ListItem button onClick={() => navigate('/settings')}>
+            <SettingsIcon sx={{ mr: 1 }} />
+            <ListItemText primary="Setting" />
           </ListItem>
           <ListItem button onClick={handleLogout}>
             <ListItemText primary="Logout" />
