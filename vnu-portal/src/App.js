@@ -162,6 +162,9 @@ import UploadHeads from './UploadHeads';
 import HeadTopics from './HeadTopics';
 import HeadStatistics from './HeadStatistics'; // Thêm import mới
 import ChangePassword from './ChangePassword';
+import UploadLecturers from './UploadLecturers'; // Thêm import UploadLecturers
+import FacultiesInfo from './FacultiesInfo';
+import FacultyMembers from './FacultyMembers';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -295,6 +298,30 @@ function App() {
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated}>
             <ChangePassword />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/upload-lecturers"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <UploadLecturers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/faculties-info"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <FacultiesInfo />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/faculty/:facultyName"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <FacultyMembers />
           </ProtectedRoute>
         }
       />

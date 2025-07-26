@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Button, Typography, Paper, CircularProgress, Alert, Drawer, List, ListItem, ListItemText } from '@mui/material';
+import {
+  Box, Button, Typography, Paper, CircularProgress, Alert, Drawer, List, ListItem, ListItemText, TextField
+} from '@mui/material';
 import logo from './logo.png';
 import HelpIcon from '@mui/icons-material/Help';
 import InfoIcon from '@mui/icons-material/Info';
@@ -14,9 +16,9 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 
-
-function UploadHeads() {
+function UploadLecturers() {
   const [excelFile, setExcelFile] = useState(null);
+  const [faculty, setFaculty] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const navigate = useNavigate();
@@ -26,15 +28,20 @@ function UploadHeads() {
 
   const handleUpload = async (e) => {
     e.preventDefault();
+    if (!faculty.trim()) {
+      setMessage({ type: 'error', text: 'Vui lòng nhập Khoa/Ngành' });
+      return;
+    }
     if (!excelFile) {
       setMessage({ type: 'error', text: 'Vui lòng chọn file Excel' });
       return;
     }
     const formData = new FormData();
+    formData.append('faculty', faculty.trim());
     formData.append('excelFile', excelFile);
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/admin/upload-heads', {
+      const response = await fetch('http://localhost:5000/admin/upload-lecturers', {
         method: 'POST',
         body: formData,
         credentials: 'include'
@@ -163,9 +170,17 @@ function UploadHeads() {
         <Box sx={{ p: 3 }}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>
-              Tải lên danh sách Chủ nhiệm bộ môn
+              Tải lên danh sách Giảng viên
             </Typography>
             <form onSubmit={handleUpload}>
+              <TextField
+                label="Khoa/Ngành"
+                value={faculty}
+                onChange={e => setFaculty(e.target.value)}
+                fullWidth
+                required
+                sx={{ mb: 2 }}
+              />
               <input
                 type="file"
                 accept=".xlsx,.xls"
@@ -186,6 +201,11 @@ function UploadHeads() {
                 {message.text}
               </Alert>
             )}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                File Excel phải gồm các cột: STT, Họ và tên, Email, Bộ môn/Phòng thí nghiệm, Chức vụ.
+              </Typography>
+            </Box>
           </Paper>
         </Box>
       </div>
@@ -193,4 +213,4 @@ function UploadHeads() {
   );
 }
 
-export default UploadHeads;
+export default UploadLecturers;

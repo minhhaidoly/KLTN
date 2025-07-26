@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Button, Typography, Paper, CircularProgress, Alert, Drawer, List, ListItem, ListItemText } from '@mui/material';
+import {
+  Box, Typography, Paper, List, ListItem, ListItemText, Drawer, CircularProgress
+} from '@mui/material';
 import logo from './logo.png';
 import HelpIcon from '@mui/icons-material/Help';
 import InfoIcon from '@mui/icons-material/Info';
@@ -14,46 +16,24 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 
-
-function UploadHeads() {
-  const [excelFile, setExcelFile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
+function FacultiesInfo() {
+  const [faculties, setFaculties] = useState([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user')) || {};
 
-  const handleFileChange = (e) => setExcelFile(e.target.files[0]);
-
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    if (!excelFile) {
-      setMessage({ type: 'error', text: 'Vui lòng chọn file Excel' });
-      return;
-    }
-    const formData = new FormData();
-    formData.append('excelFile', excelFile);
-    setLoading(true);
-    try {
-      const response = await fetch('http://localhost:5000/admin/upload-heads', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
+  useEffect(() => {
+    fetch('http://localhost:5000/faculties', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        setFaculties(data);
+        setLoading(false);
       });
-      const data = await response.json();
-      if (response.ok) {
-        setMessage({ type: 'success', text: data.message });
-      } else {
-        setMessage({ type: 'error', text: data.message });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Lỗi khi tải lên file' });
-    }
-    setLoading(false);
-  };
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
-    document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+    document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     navigate('/');
   };
 
@@ -161,36 +141,30 @@ function UploadHeads() {
       </Drawer>
       <div className="dashboard-content">
         <Box sx={{ p: 3 }}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Tải lên danh sách Chủ nhiệm bộ môn
-            </Typography>
-            <form onSubmit={handleUpload}>
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileChange}
-                style={{ marginBottom: '1rem' }}
-              />
-              <Button
-                variant="contained"
-                type="submit"
-                disabled={loading}
-                sx={{ mt: 2 }}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Tải lên'}
-              </Button>
-            </form>
-            {message.text && (
-              <Alert severity={message.type} sx={{ mt: 2 }}>
-                {message.text}
-              </Alert>
-            )}
-          </Paper>
+          <Typography variant="h4" gutterBottom>
+            Chọn Khoa/Ngành để xem danh sách giảng viên & CNBM
+          </Typography>
+          {loading ? (
+            <CircularProgress />
+          ) : (
+            <Paper sx={{ p: 2 }}>
+              <List>
+                {faculties.map((faculty, idx) => (
+                  <ListItem
+                    button
+                    key={faculty}
+                    onClick={() => navigate(`/faculty/${encodeURIComponent(faculty)}`)}
+                  >
+                    <ListItemText primary={faculty} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          )}
         </Box>
       </div>
     </div>
   );
 }
 
-export default UploadHeads;
+export default FacultiesInfo;
