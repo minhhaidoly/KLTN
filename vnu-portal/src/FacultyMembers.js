@@ -22,15 +22,27 @@ function FacultyMembers() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user')) || {}; // <-- Thêm dòng này
+  const user = JSON.parse(localStorage.getItem('user')) || {};
 
   useEffect(() => {
-    fetch(`http://localhost:5000/faculty/${encodeURIComponent(facultyName)}/members`, { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        setMembers(data);
-        setLoading(false);
-      });
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(
+          `http://localhost:5000/faculty/${encodeURIComponent(facultyName)}/members`,
+          { credentials: 'include' }
+        );
+        if (!res.ok) throw new Error('Failed to load faculty members');
+        const data = await res.json();
+        if (!cancelled) setMembers(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!cancelled) setMembers([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [facultyName]);
 
   const handleLogout = () => {
@@ -59,12 +71,14 @@ function FacultyMembers() {
             <AccountCircleIcon sx={{ mr: 1 }} />
             <ListItemText primary="Account" />
           </ListItem>
+
           {(user.role === 'Quản trị viên' || user.role === 'Giảng viên' || user.role === 'Chủ nhiệm bộ môn') && (
             <ListItem button onClick={() => navigate('/batches')}>
               <GroupIcon sx={{ mr: 1 }} />
               <ListItemText primary="Danh sách học viên" />
             </ListItem>
           )}
+
           {user.role === 'Quản trị viên' && (
             <>
               <ListItem button onClick={() => navigate('/upload')}>
@@ -85,6 +99,7 @@ function FacultyMembers() {
               </ListItem>
             </>
           )}
+
           {user.role === 'Sinh viên' && (
             <>
               <ListItem button onClick={() => navigate('/propose-topic')}>
@@ -97,24 +112,21 @@ function FacultyMembers() {
               </ListItem>
             </>
           )}
+
           {user.role === 'Giảng viên' && (
             <ListItem button onClick={() => navigate('/topics')}>
               <AssignmentIcon sx={{ mr: 1 }} />
               <ListItemText primary="Đề xuất từ học viên" />
             </ListItem>
           )}
+
           {user.role === 'Chủ nhiệm bộ môn' && (
             <ListItem button onClick={() => navigate('/head/topics')}>
               <AssignmentIcon sx={{ mr: 1 }} />
               <ListItemText primary="Đề tài chờ phê duyệt" />
             </ListItem>
           )}
-          {user.role === 'Chủ nhiệm bộ môn' && (
-            <ListItem button onClick={() => navigate('/head/statistics')}>
-              <GroupIcon sx={{ mr: 1 }} />
-              <ListItemText primary="Thống kê học viên" />
-            </ListItem>
-          )}
+
           <ListItem button onClick={() => navigate('/calendar')}>
             <CalendarMonthIcon sx={{ mr: 1 }} />
             <ListItemText primary="Calendar" />
@@ -141,11 +153,13 @@ function FacultyMembers() {
           </ListItem>
         </List>
       </Drawer>
+
       <div className="dashboard-content">
         <Box sx={{ p: 3 }}>
           <Typography variant="h4" gutterBottom>
             Danh sách giảng viên & CNBM - {facultyName}
           </Typography>
+
           {loading ? (
             <CircularProgress />
           ) : (
@@ -170,10 +184,18 @@ function FacultyMembers() {
                       <TableCell>{row.position}</TableCell>
                     </TableRow>
                   ))}
+                  {members.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Typography color="text.secondary">Chưa có dữ liệu.</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
+
           <Button sx={{ mt: 2 }} variant="outlined" onClick={() => navigate('/faculties-info')}>
             Quay lại danh sách Khoa/Ngành
           </Button>

@@ -33,6 +33,9 @@ function Dashboard() {
   // Chiều rộng nút (1/6 Drawer)
   const buttonWidth = drawerWidth / 6;
 
+  // const drawerWidth = 240;
+  const collapsedWidth = 60;
+
   return (
     <div className="dashboard">
       {/* Nút nhỏ ở góc trái dưới cùng, luôn hiển thị */}
@@ -127,6 +130,10 @@ function Dashboard() {
                 <AssignmentIcon sx={{ mr: 1 }} />
                 <ListItemText primary="Đề tài chưa được phê duyệt" />
               </ListItem>
+              <ListItem button onClick={() => navigate('/faculties-info')}>
+                <InfoIcon sx={{ mr: 1 }} />
+                <ListItemText primary="Thông tin" />
+              </ListItem>
             </>
           )}
           {user.role === 'Sinh viên' && (
@@ -138,6 +145,10 @@ function Dashboard() {
               <ListItem button onClick={() => navigate('/faculties-info')}>
                 <InfoIcon sx={{ mr: 1 }} />
                 <ListItemText primary="Thông tin" />
+              </ListItem>
+              <ListItem button onClick={() => navigate('/notifications')}>
+                <InfoIcon sx={{ mr: 1 }} />
+                <ListItemText primary="Thông báo" />
               </ListItem>
             </>
           )}
@@ -195,7 +206,7 @@ function Dashboard() {
       >
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h4" gutterBottom>
-            Hello {user.username || 'Khách'}
+            Hello {user.userInfo?.fullName || user.studentInfo?.fullName || user.username || 'Khách'}
           </Typography>
           <Typography variant="subtitle1">
             Role: {user.role || 'Không xác định'}

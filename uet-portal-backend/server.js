@@ -40,7 +40,9 @@ const userSchema = new mongoose.Schema({
   userInfo: {
     fullName: String,
     email: String,
-    // Thêm các trường khác nếu cần
+    faculty: String,      // <-- Thêm trường này để lưu Khoa/ngành cho giảng viên
+    department: String,   // Bộ môn/phòng thí nghiệm
+    position: String      // Chức vụ
   },
   // Thông tin riêng cho sinh viên
   studentInfo: {
@@ -48,7 +50,15 @@ const userSchema = new mongoose.Schema({
     fullName: String,
     birthDate: Date,
     major: String,
-  }
+  },
+  notifications: [
+    {
+      message: String,
+      type: { type: String, default: 'topic' },
+      createdAt: { type: Date, default: Date.now },
+      read: { type: Boolean, default: false }
+    }
+  ]
 });
 
 const User = mongoose.model('User', userSchema);
@@ -154,7 +164,6 @@ app.post('/register', async (req, res) => {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 });
-
 // API đăng nhập
 app.post('/login', async (req, res) => {
   const { username, password, role } = req.body;
@@ -234,10 +243,31 @@ app.post('/admin/upload-students', authenticateJWT, upload.single('excelFile'), 
 
     worksheet.eachRow(async (row, rowNumber) => {
       if (rowNumber > 1) { // Bỏ qua header row
+        let birthDateRaw = row.getCell(3).value;
+        let birthDate;
+
+        if (birthDateRaw instanceof Date) {
+          birthDate = birthDateRaw;
+        } else if (typeof birthDateRaw === 'string') {
+          // Xử lý cả dạng "3/10/2003", "03/10/2003", "08/06/2003"
+          const parts = birthDateRaw.split(/[\/\-]/);
+          if (parts.length === 3) {
+            // Loại bỏ số 0 ở đầu nếu có
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            birthDate = new Date(year, month - 1, day);
+          } else {
+            birthDate = null;
+          }
+        } else {
+          birthDate = null;
+        }
+
         const studentData = {
           studentId: row.getCell(1).value?.toString(),
           fullName: row.getCell(2).value?.toString(),
-          birthDate: row.getCell(3).value,
+          birthDate: birthDate,
           major: row.getCell(4).value?.toString(),
         };
 
@@ -503,6 +533,19 @@ app.get('/students/batches', authenticateJWT, async (req, res) => {
   }
 });
 
+app.get('/batch/:id', authenticateJWT, async (req, res) => {
+  try {
+    const batch = await StudentBatch.findById(req.params.id);
+    if (!batch) {
+      return res.status(404).json({ message: 'Không tìm thấy đợt học viên' });
+    }
+    res.status(200).json({ batch });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+
 // API lấy danh sách CNBM (cho admin quản lý)
 app.get('/admin/heads', authenticateJWT, async (req, res) => {
   try {
@@ -756,6 +799,25 @@ app.put('/supervisor/review-topic/:id', authenticateJWT, async (req, res) => {
 
     await proposal.save();
 
+    // Sau khi proposal.status được cập nhật
+    const studentUser = await User.findOne({ 'studentInfo.studentId': proposal.studentId });
+    if (studentUser) {
+      let notifyMsg = '';
+      if (status === 'approved') {
+        notifyMsg = `Đề tài "${proposal.topicTitle}" của bạn đã được giảng viên phê duyệt.`;
+      } else if (status === 'rejected') {
+        notifyMsg = `Đề tài "${proposal.topicTitle}" của bạn đã bị từ chối.`;
+      }
+      studentUser.notifications = studentUser.notifications || [];
+      studentUser.notifications.push({
+        message: notifyMsg,
+        type: 'topic',
+        createdAt: new Date(),
+        read: false
+      });
+      await studentUser.save();
+    }
+
     res.status(200).json({
       message: `Đề tài đã được ${status === 'approved' ? 'phê duyệt' : 'từ chối'}`,
       proposal
@@ -827,16 +889,34 @@ app.put('/head/review-topic/:id', authenticateJWT, async (req, res) => {
     return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
   }
   const proposal = await TopicProposal.findById(req.params.id);
-  if (!proposal || !proposal.headId.equals(req.user._id)) {
-    return res.status(404).json({ message: 'Không tìm thấy đề xuất' });
-  }
+  const studentUser = await User.findOne({ 'studentInfo.studentId': proposal.studentId });
   if (status === 'approved_by_head') {
     proposal.status = 'approved_by_head';
     proposal.headComments = comments;
     await proposal.save();
+    if (studentUser) {
+      studentUser.notifications = studentUser.notifications || [];
+      studentUser.notifications.push({
+        message: `Đề tài "${proposal.topicTitle}" của bạn đã được CNBM phê duyệt.`,
+        type: 'topic',
+        createdAt: new Date(),
+        read: false
+      });
+      await studentUser.save();
+    }
     res.status(200).json({ message: 'Đề tài đã được CNBM phê duyệt', proposal });
   } else {
     // Trả lại: xóa đề tài khỏi DB
+    if (studentUser) {
+      studentUser.notifications = studentUser.notifications || [];
+      studentUser.notifications.push({
+        message: `Đề tài "${proposal.topicTitle}" của bạn đã bị CNBM trả lại.`,
+        type: 'topic',
+        createdAt: new Date(),
+        read: false
+      });
+      await studentUser.save();
+    }
     await proposal.deleteOne();
     res.status(200).json({ message: 'Đề tài đã bị trả lại và xóa khỏi hệ thống' });
   }
@@ -1038,10 +1118,18 @@ app.post('/admin/upload-lecturers', authenticateJWT, upload.single('excelFile'),
 // API lấy danh sách các khoa/ngành (từ giảng viên và CNBM)
 app.get('/faculties', authenticateJWT, async (req, res) => {
   try {
-    // Lấy tất cả faculty từ user là Giảng viên và CNBM
-    const lecturers = await User.find({ role: { $in: ['Giảng viên', 'Chủ nhiệm bộ môn'] } }).select('userInfo.faculty');
-    const faculties = [...new Set(lecturers.map(l => l.userInfo?.faculty).filter(Boolean))];
-    res.status(200).json(faculties);
+    // Lấy faculty từ giảng viên
+    const lecturers = await User.find({ role: 'Giảng viên' }).select('userInfo.faculty');
+    // Lấy managedMajor từ CNBM
+    const heads = await User.find({ role: 'Chủ nhiệm bộ môn' }).select('managedMajor');
+    // Tổng hợp danh sách khoa/ngành
+    const faculties = [
+      ...lecturers.map(l => l.userInfo?.faculty).filter(Boolean),
+      ...heads.map(h => h.managedMajor).filter(Boolean)
+    ];
+    // Loại bỏ trùng lặp
+    const uniqueFaculties = [...new Set(faculties)];
+    res.status(200).json(uniqueFaculties);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
@@ -1056,10 +1144,10 @@ app.get('/faculty/:facultyName/members', authenticateJWT, async (req, res) => {
       role: 'Giảng viên',
       'userInfo.faculty': facultyName
     }).select('userInfo.fullName userInfo.email userInfo.department userInfo.position');
-    // Lấy CNBM
+    // Lấy CNBM theo managedMajor
     const heads = await User.find({
       role: 'Chủ nhiệm bộ môn',
-      'userInfo.faculty': facultyName
+      managedMajor: facultyName
     }).select('userInfo.fullName userInfo.email managedMajor');
     // Gộp kết quả
     const result = [
@@ -1084,4 +1172,417 @@ app.get('/faculty/:facultyName/members', authenticateJWT, async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
+});
+// Calendar 
+
+// Calendar Schema
+const eventSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String },
+  eventType: { 
+    type: String, 
+    required: true,
+    enum: ['academic', 'thesis_defense', 'meeting', 'deadline', 'holiday', 'exam', 'other']
+  },
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
+  isAllDay: { type: Boolean, default: false },
+  location: { type: String },
+  
+  // Quyền truy cập
+  visibility: {
+    type: String,
+    enum: ['public', 'major_only', 'role_only', 'private'],
+    default: 'public'
+  },
+  
+  // Phạm vi áp dụng
+  targetRoles: [{ type: String, enum: ['Sinh viên', 'Giảng viên', 'Quản trị viên', 'Chủ nhiệm bộ môn'] }],
+  targetMajors: [String], // Các ngành được xem sự kiện
+  
+  // Thông tin người tạo
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+  
+  // Liên kết với đề tài (nếu có)
+  relatedTopic: { type: mongoose.Schema.Types.ObjectId, ref: 'TopicProposal' },
+  
+  // Trạng thái
+  status: { type: String, enum: ['active', 'cancelled', 'completed'], default: 'active' },
+  
+  // Reminder
+  reminderMinutes: { type: Number, default: 60 }, // Nhắc nhở trước bao nhiêu phút
+  
+  // Recurring events
+  isRecurring: { type: Boolean, default: false },
+  recurringPattern: {
+    type: { type: String, enum: ['daily', 'weekly', 'monthly', 'yearly'] },
+    interval: { type: Number, default: 1 }, // Mỗi bao nhiêu đơn vị
+    endDate: Date, // Kết thúc lặp lại
+    daysOfWeek: [Number], // 0-6 cho Chủ nhật - Thứ 7
+    dayOfMonth: Number, // Ngày trong tháng
+    month: Number // Tháng trong năm
+  }
+});
+
+const Event = mongoose.model('Event', eventSchema);
+
+// API tạo sự kiện
+app.post('/calendar/events', authenticateJWT, async (req, res) => {
+  try {
+    const {
+      title, description, eventType, startDate, endDate, isAllDay,
+      location, visibility, targetRoles, targetMajors, reminderMinutes,
+      isRecurring, recurringPattern
+    } = req.body;
+
+    // Validation
+    if (!title || !eventType || !startDate || !endDate) {
+      return res.status(400).json({ message: 'Thiếu thông tin bắt buộc' });
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      return res.status(400).json({ message: 'Thời gian bắt đầu không thể sau thời gian kết thúc' });
+    }
+
+    // Kiểm tra quyền tạo sự kiện
+    if (req.user.role === 'Sinh viên' && visibility !== 'private') {
+      return res.status(403).json({ message: 'Sinh viên chỉ có thể tạo sự kiện riêng tư' });
+    }
+
+    const event = new Event({
+      title,
+      description,
+      eventType,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      isAllDay,
+      location,
+      visibility: visibility || 'public',
+      targetRoles: targetRoles || [],
+      targetMajors: targetMajors || [],
+      createdBy: req.user._id,
+      reminderMinutes: reminderMinutes || 60,
+      isRecurring: isRecurring || false,
+      recurringPattern: isRecurring ? recurringPattern : undefined
+    });
+
+    await event.save();
+
+    const populatedEvent = await Event.findById(event._id)
+      .populate('createdBy', 'username userInfo.fullName')
+      .populate('relatedTopic', 'topicTitle studentName');
+
+    res.status(201).json({
+      message: 'Tạo sự kiện thành công',
+      event: populatedEvent
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+// API lấy danh sách sự kiện (với filter)
+app.get('/calendar/events', authenticateJWT, async (req, res) => {
+  try {
+    const { startDate, endDate, eventType, major } = req.query;
+    const user = await User.findById(req.user._id);
+    
+    // Build filter
+    let filter = {
+      status: 'active'
+    };
+
+    // Lọc theo thời gian
+    if (startDate || endDate) {
+      filter.$or = [];
+      if (startDate && endDate) {
+        filter.$or.push({
+          $and: [
+            { startDate: { $lte: new Date(endDate) } },
+            { endDate: { $gte: new Date(startDate) } }
+          ]
+        });
+      } else if (startDate) {
+        filter.endDate = { $gte: new Date(startDate) };
+      } else if (endDate) {
+        filter.startDate = { $lte: new Date(endDate) };
+      }
+    }
+
+    // Lọc theo loại sự kiện
+    if (eventType) {
+      filter.eventType = eventType;
+    }
+
+    // Lọc theo quyền truy cập
+    const accessFilter = {
+      $or: [
+        { visibility: 'public' },
+        { createdBy: req.user._id }, // Sự kiện do mình tạo
+        { 
+          visibility: 'role_only',
+          targetRoles: { $in: [req.user.role] }
+        }
+      ]
+    };
+
+    // Thêm filter theo ngành cho sinh viên và CNBM
+    if (req.user.role === 'Sinh viên' && user.studentInfo?.major) {
+      accessFilter.$or.push({
+        visibility: 'major_only',
+        targetMajors: { $in: [user.studentInfo.major] }
+      });
+    } else if (req.user.role === 'Chủ nhiệm bộ môn' && user.managedMajor) {
+      accessFilter.$or.push({
+        visibility: 'major_only',
+        targetMajors: { $in: [user.managedMajor] }
+      });
+    }
+
+    // Combine filters
+    const finalFilter = {
+      $and: [filter, accessFilter]
+    };
+
+    const events = await Event.find(finalFilter)
+      .populate('createdBy', 'username userInfo.fullName studentInfo.fullName')
+      .populate('relatedTopic', 'topicTitle studentName')
+      .sort({ startDate: 1 });
+
+    res.status(200).json(events);
+
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+// API cập nhật sự kiện
+app.put('/calendar/events/:id', authenticateJWT, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+    }
+
+    // Kiểm tra quyền chỉnh sửa
+    const canEdit = (
+      event.createdBy.equals(req.user._id) || 
+      req.user.role === 'Quản trị viên'
+    );
+
+    if (!canEdit) {
+      return res.status(403).json({ message: 'Không có quyền chỉnh sửa sự kiện này' });
+    }
+
+    const {
+      title, description, eventType, startDate, endDate, isAllDay,
+      location, visibility, targetRoles, targetMajors, status,
+      reminderMinutes
+    } = req.body;
+
+    // Validation
+    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+      return res.status(400).json({ message: 'Thời gian bắt đầu không thể sau thời gian kết thúc' });
+    }
+
+    // Update fields
+    if (title) event.title = title;
+    if (description !== undefined) event.description = description;
+    if (eventType) event.eventType = eventType;
+    if (startDate) event.startDate = new Date(startDate);
+    if (endDate) event.endDate = new Date(endDate);
+    if (isAllDay !== undefined) event.isAllDay = isAllDay;
+    if (location !== undefined) event.location = location;
+    if (visibility) event.visibility = visibility;
+    if (targetRoles) event.targetRoles = targetRoles;
+    if (targetMajors) event.targetMajors = targetMajors;
+    if (status) event.status = status;
+    if (reminderMinutes !== undefined) event.reminderMinutes = reminderMinutes;
+    
+    event.updatedAt = new Date();
+
+    await event.save();
+
+    const updatedEvent = await Event.findById(eventId)
+      .populate('createdBy', 'username userInfo.fullName')
+      .populate('relatedTopic', 'topicTitle studentName');
+
+    res.status(200).json({
+      message: 'Cập nhật sự kiện thành công',
+      event: updatedEvent
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+// API xóa sự kiện
+app.delete('/calendar/events/:id', authenticateJWT, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+    }
+
+    // Kiểm tra quyền xóa
+    const canDelete = (
+      event.createdBy.equals(req.user._id) || 
+      req.user.role === 'Quản trị viên'
+    );
+
+    if (!canDelete) {
+      return res.status(403).json({ message: 'Không có quyền xóa sự kiện này' });
+    }
+
+    await Event.findByIdAndDelete(eventId);
+
+    res.status(200).json({ message: 'Xóa sự kiện thành công' });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+// API lấy thống kê sự kiện (cho admin/CNBM)
+app.get('/calendar/statistics', authenticateJWT, async (req, res) => {
+  try {
+    if (!['Quản trị viên', 'Chủ nhiệm bộ môn'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Không có quyền truy cập' });
+    }
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const endOfMonth = new Date();
+    endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+    endOfMonth.setDate(0);
+    endOfMonth.setHours(23, 59, 59, 999);
+
+    const statistics = await Event.aggregate([
+      {
+        $match: {
+          startDate: { $gte: startOfMonth, $lte: endOfMonth }
+        }
+      },
+      {
+        $group: {
+          _id: '$eventType',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const totalEvents = await Event.countDocuments({
+      startDate: { $gte: startOfMonth, $lte: endOfMonth }
+    });
+
+    const upcomingEvents = await Event.countDocuments({
+      startDate: { $gte: new Date() },
+      status: 'active'
+    });
+
+    res.status(200).json({
+      totalEventsThisMonth: totalEvents,
+      upcomingEvents,
+      eventsByType: statistics
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+// API tự động tạo sự kiện từ deadline đề tài
+app.post('/calendar/auto-create-topic-events', authenticateJWT, async (req, res) => {
+  try {
+    if (req.user.role !== 'Quản trị viên') {
+      return res.status(403).json({ message: 'Chỉ admin mới có quyền tạo sự kiện tự động' });
+    }
+
+    const { title, deadlineDate, targetMajors, reminderDays = 7 } = req.body;
+
+    if (!title || !deadlineDate) {
+      return res.status(400).json({ message: 'Thiếu thông tin bắt buộc' });
+    }
+
+    const event = new Event({
+      title: `Hạn nộp: ${title}`,
+      description: `Hạn cuối nộp ${title}`,
+      eventType: 'deadline',
+      startDate: new Date(deadlineDate),
+      endDate: new Date(deadlineDate),
+      isAllDay: true,
+      visibility: 'major_only',
+      targetMajors: targetMajors || [],
+      targetRoles: ['Sinh viên'],
+      createdBy: req.user._id,
+      reminderMinutes: reminderDays * 24 * 60 // Convert days to minutes
+    });
+
+    await event.save();
+
+    res.status(201).json({
+      message: 'Tạo sự kiện deadline thành công',
+      event
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+// xuất ra file excel danh sách học viên để tải danh sách về
+app.get('/batch/:id/export', authenticateJWT, async (req, res) => {
+  try {
+    const batch = await StudentBatch.findById(req.params.id);
+    if (!batch) {
+      return res.status(404).json({ message: 'Không tìm thấy đợt học viên' });
+    }
+
+    const workbook = new exceljs.Workbook();
+    const worksheet = workbook.addWorksheet('Danh sách học viên');
+
+    worksheet.columns = [
+      { header: 'STT', key: 'stt', width: 8 },
+      { header: 'Mã học viên', key: 'studentId', width: 20 },
+      { header: 'Họ và tên', key: 'fullName', width: 30 },
+      { header: 'Ngày sinh', key: 'birthDate', width: 18 },
+      { header: 'Ngành học', key: 'major', width: 25 },
+    ];
+
+    batch.students.forEach((student, idx) => {
+      worksheet.addRow({
+        stt: idx + 1,
+        studentId: student.studentId,
+        fullName: student.fullName,
+        birthDate: student.birthDate ? new Date(student.birthDate).toLocaleDateString('vi-VN') : '',
+        major: student.major
+      });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="danh_sach_hoc_vien.xlsx"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
+app.get('/student/notifications', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Sinh viên') {
+    return res.status(403).json({ message: 'Chỉ sinh viên mới xem được thông báo' });
+  }
+  const user = await User.findById(req.user._id);
+  res.status(200).json(user.notifications || []);
 });
