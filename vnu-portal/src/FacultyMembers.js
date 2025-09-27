@@ -36,6 +36,13 @@ function FacultyMembers() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [page, setPage] = useState(0);
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [positionFilter, setPositionFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [searchName, setSearchName] = useState("");
+  const [searchEmail, setSearchEmail] = useState("");
   const drawerWidth = 240;
   const buttonWidth = 40;
   const navigate = useNavigate();
@@ -141,6 +148,21 @@ function FacultyMembers() {
     document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     navigate('/');
   };
+
+  const uniqueDepartments = Array.from(new Set(members.map(m => m.department).filter(Boolean)));
+  const uniquePositions = Array.from(new Set(members.map(m => m.position).filter(Boolean)));
+  const uniqueRoles = Array.from(new Set(members.map(m => m.role).filter(Boolean)));
+
+  const filteredMembers = members.filter(m => {
+    let ok = true;
+    if (searchName && !m.fullName?.toLowerCase().includes(searchName.toLowerCase())) ok = false;
+    if (searchEmail && !m.email?.toLowerCase().includes(searchEmail.toLowerCase())) ok = false;
+    if (departmentFilter && m.department !== departmentFilter) ok = false;
+    if (positionFilter && m.position !== positionFilter) ok = false;
+    if (roleFilter && m.role !== roleFilter) ok = false;
+    return ok;
+  });
+  const pagedMembers = filteredMembers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   return (
     <div className="dashboard">
@@ -305,62 +327,147 @@ function FacultyMembers() {
 
       <div className="dashboard-content">
         <Box sx={{ p: 3 }}>
-          <Typography variant="h4" gutterBottom>
-            Danh sách giảng viên & CNBM - {facultyName}
-          </Typography>
+          <Box sx={{ position: 'sticky', top: 0, paddingBottom: 0, backgroundColor: 'white', zIndex: 20, boxShadow: 2, pb: 2, mb: 2 }}>
+            <Typography variant="h4" gutterBottom>
+              Danh sách giảng viên & CNBM - Ngành: {facultyName}
+            </Typography>
+            {user.role === 'Quản trị viên' && (
+              <Button startIcon={<AddIcon />} variant="contained" sx={{ mb: 2 }} onClick={() => { setMemberForm({ email: '', fullName: '', department: '', position: '', role: 'Giảng viên' }); setAddDialogOpen(true); }}>
+                Thêm thành viên
+              </Button>
+            )}
+          </Box>
           {message.text && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
-          {user.role === 'Quản trị viên' && (
-            <Button startIcon={<AddIcon />} variant="contained" sx={{ mb: 2 }} onClick={() => { setMemberForm({ email: '', fullName: '', department: '', position: '', role: 'Giảng viên' }); setAddDialogOpen(true); }}>
-              Thêm thành viên
-            </Button>
-          )}
           {loading ? <CircularProgress /> : (
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>STT</TableCell>
-                    <TableCell>Họ và tên</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Bộ môn/Phòng thí nghiệm</TableCell>
-                    <TableCell>Chức vụ</TableCell>
-                    {user.role === 'Quản trị viên' && (
-                      <TableCell>Vai trò</TableCell>
-                    )}
-                    {user.role === 'Quản trị viên' && (
-                      <TableCell>Hành động</TableCell>
-                    )}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {members.map((row, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{row.stt}</TableCell>
-                      <TableCell>{row.fullName}</TableCell>
-                      <TableCell>{row.email}</TableCell>
-                      <TableCell>{row.department}</TableCell>
-                      <TableCell>{row.position}</TableCell>
-                      {user.role === 'Quản trị viên' && (
-                        <TableCell>{row.role}</TableCell>
-                      )}
-                      {user.role === 'Quản trị viên' && (
+            <>
+              <Box sx={{ height: 500, overflowY: 'auto', backgroundColor: 'white', borderRadius: 2, boxShadow: 1, mb: 2, pt: 2 }}>
+                <Box sx={{ position: 'sticky', mb: 2, display: 'flex', alignItems: 'center', px: 2 }}>
+                  <Typography sx={{ mr: 2 }}>Số bản ghi/trang:</Typography>
+                  <select
+                    value={rowsPerPage}
+                    onChange={e => { setRowsPerPage(Number(e.target.value)); setPage(0); }}
+                    style={{ padding: '4px 8px' }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={100}>100</option>
+                    <option value={500}>500</option>
+                  </select>
+                </Box>
+                <TableContainer component={Paper} sx={{ maxHeight: 440, boxShadow: 0, minWidth: 900 }}>
+                  <Table stickyHeader sx={{ width: 1200 }}>
+                    <TableHead>
+                      {/* Sticky search row */}
+                      <TableRow sx={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 22 }}>
+                        <TableCell></TableCell>
                         <TableCell>
-                          <IconButton onClick={() => { setSelectedMember(row); setMemberForm(row); setEditDialogOpen(true); }}><EditIcon /></IconButton>
-                          <IconButton color="error" onClick={() => { setSelectedMember(row); setDeleteDialogOpen(true); }}><DeleteIcon /></IconButton>
+                          <input
+                            type="text"
+                            placeholder="Tìm kiếm họ và tên"
+                            value={searchName}
+                            onChange={e => setSearchName(e.target.value)}
+                            style={{ width: '100%', padding: '4px 8px' }}
+                          />
                         </TableCell>
+                        <TableCell>
+                          <input
+                            type="text"
+                            placeholder="Tìm kiếm email"
+                            value={searchEmail}
+                            onChange={e => setSearchEmail(e.target.value)}
+                            style={{ width: '100%', padding: '4px 8px' }}
+                          />
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        {user.role === 'Quản trị viên' && (
+                          <TableCell></TableCell>
+                        )}
+                      </TableRow>
+                      {/* Filter row */}
+                      <TableRow>
+                        <TableCell>STT</TableCell>
+                        <TableCell>Họ và tên</TableCell>
+                        <TableCell>Email</TableCell>
+                        <TableCell>
+                          <select value={departmentFilter} onChange={e => setDepartmentFilter(e.target.value)} style={{ width: '100%' }}>
+                            <option value=''>Bộ môn/ Phòng thí nghiệm</option>
+                            {uniqueDepartments.map(dep => (
+                              <option key={dep} value={dep}>{dep}</option>
+                            ))}
+                          </select>
+                        </TableCell>
+                        <TableCell>
+                          <select value={positionFilter} onChange={e => setPositionFilter(e.target.value)} style={{ width: '100%' }}>
+                            <option value=''>Chức vụ</option>
+                            {uniquePositions.map(dep => (
+                              <option key={dep} value={dep}>{dep}</option>
+                            ))}
+                          </select>
+                        </TableCell>
+                        <TableCell>
+                          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} style={{ width: '100%' }}>
+                            <option value=''>Vai trò</option>
+                            {uniqueRoles.map(dep => (
+                              <option key={dep} value={dep}>{dep}</option>
+                            ))}
+                          </select>
+                        </TableCell>
+                        {user.role === 'Quản trị viên' && (
+                          <TableCell>Hành động</TableCell>
+                        )}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {pagedMembers.map((row, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>{row.stt}</TableCell>
+                          <TableCell>{row.fullName}</TableCell>
+                          <TableCell>{row.email}</TableCell>
+                          <TableCell>{row.department}</TableCell>
+                          <TableCell>{row.position}</TableCell>
+                          {user.role === 'Quản trị viên' && (
+                            <TableCell>{row.role}</TableCell>
+                          )}
+                          {user.role === 'Quản trị viên' && (
+                            <TableCell>
+                              <IconButton onClick={() => { setSelectedMember(row); setMemberForm(row); setEditDialogOpen(true); }}><EditIcon /></IconButton>
+                              <IconButton color="error" onClick={() => { setSelectedMember(row); setDeleteDialogOpen(true); }}><DeleteIcon /></IconButton>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                      {members.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7}>
+                            <Typography color="text.secondary">Chưa có dữ liệu.</Typography>
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </TableRow>
-                  ))}
-                  {members.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7}>
-                        <Typography color="text.secondary">Chưa có dữ liệu.</Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <Button
+                  disabled={page === 0}
+                  onClick={() => setPage(page - 1)}
+                  sx={{ mr: 2 }}
+                >
+                  Trang trước
+                </Button>
+                <Typography>
+                  Trang {page + 1} / {Math.ceil(members.length / rowsPerPage)}
+                </Typography>
+                <Button
+                  disabled={(page + 1) * rowsPerPage >= members.length}
+                  onClick={() => setPage(page + 1)}
+                  sx={{ ml: 2 }}
+                >
+                  Trang sau
+                </Button>
+              </Box>
+            </>
           )}
 
           {/* Dialog thêm thành viên */}
