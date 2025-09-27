@@ -1586,3 +1586,175 @@ app.get('/student/notifications', authenticateJWT, async (req, res) => {
   const user = await User.findById(req.user._id);
   res.status(200).json(user.notifications || []);
 });
+
+app.get('/admin/batch-names', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') {
+    return res.status(403).json({ message: 'Không có quyền truy cập' });
+  }
+  const { year } = req.query;
+  if (!year) return res.status(400).json({ message: 'Thiếu năm' });
+  const regex = new RegExp(`^Đợt \\d+/${year}$`);
+  const batches = await StudentBatch.find({ batchName: { $regex: regex } }).select('batchName');
+  res.json(batches.map(b => b.batchName));
+});
+
+
+
+// Thêm học viên vào đợt (và tạo tài khoản nếu chưa có)
+app.post('/admin/batch/:batchId/add-student', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { batchId } = req.params;
+  const { studentId, fullName, birthDate, major } = req.body;
+  if (!studentId || !fullName || !major) return res.status(400).json({ message: 'Thiếu thông tin học viên' });
+
+  const batch = await StudentBatch.findById(batchId);
+  if (!batch) return res.status(404).json({ message: 'Không tìm thấy đợt học viên' });
+
+  // Thêm vào danh sách đợt
+  batch.students.push({ studentId, fullName, birthDate, major });
+  await batch.save();
+
+  // Tạo tài khoản nếu chưa có
+  let user = await User.findOne({ username: studentId });
+  if (!user) {
+    const hashedPassword = await bcrypt.hash('123', 10);
+    user = new User({
+      username: studentId,
+      password: hashedPassword,
+      role: 'Sinh viên',
+      studentInfo: { studentId, fullName, birthDate, major }
+    });
+    await user.save();
+  }
+  res.json({ message: 'Đã thêm học viên vào đợt', student: { studentId, fullName, birthDate, major } });
+});
+
+// Sửa thông tin học viên (không sửa mật khẩu)
+app.put('/admin/student/:studentId', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { studentId } = req.params;
+  const { fullName, birthDate, major } = req.body;
+  const user = await User.findOne({ username: studentId, role: 'Sinh viên' });
+  if (!user) return res.status(404).json({ message: 'Không tìm thấy học viên' });
+  if (fullName) user.studentInfo.fullName = fullName;
+  if (birthDate) user.studentInfo.birthDate = birthDate;
+  if (major) user.studentInfo.major = major;
+  await user.save();
+  res.json({ message: 'Đã cập nhật thông tin học viên', student: user.studentInfo });
+});
+
+// Xóa học viên khỏi đợt, có thể xóa cả tài khoản
+app.delete('/admin/batch/:batchId/student/:studentId', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { batchId, studentId } = req.params;
+  const { deleteAccount } = req.query;
+  const batch = await StudentBatch.findById(batchId);
+  if (!batch) return res.status(404).json({ message: 'Không tìm thấy đợt học viên' });
+
+  batch.students = batch.students.filter(s => s.studentId !== studentId);
+  await batch.save();
+
+  let msg = 'Đã xóa học viên khỏi danh sách đợt';
+  if (deleteAccount === 'true') {
+    await User.deleteOne({ username: studentId, role: 'Sinh viên' });
+    msg += ' và xóa tài khoản khỏi hệ thống';
+  }
+  res.json({ message: msg });
+});
+
+// Thêm giảng viên
+app.post('/admin/faculty/:facultyName/add-lecturer', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { facultyName } = req.params;
+  const { email, fullName, department, position } = req.body;
+  if (!email || !fullName) return res.status(400).json({ message: 'Thiếu thông tin giảng viên' });
+
+  let user = await User.findOne({ username: email });
+  if (user) return res.status(400).json({ message: 'Email đã tồn tại' });
+
+  const hashedPassword = await bcrypt.hash('123', 10);
+  user = new User({
+    username: email,
+    password: hashedPassword,
+    role: 'Giảng viên',
+    userInfo: { fullName, email, faculty: facultyName, department, position }
+  });
+  await user.save();
+  res.json({ message: 'Đã thêm giảng viên', lecturer: user.userInfo });
+});
+
+// Sửa thông tin giảng viên
+app.put('/admin/lecturer/:lecturerId', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { lecturerId } = req.params;
+  const { fullName, department, position, faculty } = req.body;
+  const user = await User.findById(lecturerId);
+  if (!user || user.role !== 'Giảng viên') return res.status(404).json({ message: 'Không tìm thấy giảng viên' });
+  if (fullName) user.userInfo.fullName = fullName;
+  if (department) user.userInfo.department = department;
+  if (position) user.userInfo.position = position;
+  if (faculty) user.userInfo.faculty = faculty;
+  await user.save();
+  res.json({ message: 'Đã cập nhật thông tin giảng viên', lecturer: user.userInfo });
+});
+
+// Xóa giảng viên
+app.delete('/admin/lecturer/:lecturerId', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { lecturerId } = req.params;
+  const user = await User.findById(lecturerId);
+  if (!user || user.role !== 'Giảng viên') return res.status(404).json({ message: 'Không tìm thấy giảng viên' });
+  await User.findByIdAndDelete(lecturerId);
+  res.json({ message: 'Đã xóa giảng viên khỏi hệ thống' });
+});
+
+// Thêm CNBM
+app.post('/admin/faculty/:facultyName/add-head', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { facultyName } = req.params;
+  const { email, fullName } = req.body;
+  if (!email || !fullName) return res.status(400).json({ message: 'Thiếu thông tin CNBM' });
+
+  let user = await User.findOne({ username: email });
+  if (user) return res.status(400).json({ message: 'Email đã tồn tại' });
+
+  // Kiểm tra ngành đã có CNBM chưa
+  const existingHead = await User.findOne({ role: 'Chủ nhiệm bộ môn', managedMajor: facultyName });
+  if (existingHead) return res.status(400).json({ message: 'Ngành đã có CNBM' });
+
+  const hashedPassword = await bcrypt.hash('123', 10);
+  user = new User({
+    username: email,
+    password: hashedPassword,
+    role: 'Chủ nhiệm bộ môn',
+    userInfo: { fullName, email },
+    managedMajor: facultyName
+  });
+  await user.save();
+  res.json({ message: 'Đã thêm CNBM', head: user.userInfo });
+});
+
+// Sửa thông tin CNBM
+app.put('/admin/head/:headId', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { headId } = req.params;
+  const { fullName, managedMajor, email } = req.body;
+  const user = await User.findById(headId);
+  if (!user || user.role !== 'Chủ nhiệm bộ môn') return res.status(404).json({ message: 'Không tìm thấy CNBM' });
+  if (fullName) user.userInfo.fullName = fullName;
+  if (email) user.userInfo.email = email;
+  if (managedMajor) user.managedMajor = managedMajor;
+  await user.save();
+  res.json({ message: 'Đã cập nhật thông tin CNBM', head: user.userInfo });
+});
+
+// Xóa CNBM
+app.delete('/admin/head/:headId', authenticateJWT, async (req, res) => {
+  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  const { headId } = req.params;
+  const user = await User.findById(headId);
+  if (!user || user.role !== 'Chủ nhiệm bộ môn') return res.status(404).json({ message: 'Không tìm thấy CNBM' });
+  await User.findByIdAndDelete(headId);
+  res.json({ message: 'Đã xóa CNBM khỏi hệ thống' });
+});
+

@@ -171,6 +171,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import {
   Box, Typography, Paper, List, ListItem, ListItemText, Drawer, CircularProgress
 } from '@mui/material';
@@ -186,10 +187,16 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import SettingsIcon from '@mui/icons-material/Settings';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import IconButton from '@mui/material/IconButton';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 function FacultiesInfo() {
   const [faculties, setFaculties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerWidth = 240;
+  const buttonWidth = 40;
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user')) || {};
 
@@ -218,7 +225,57 @@ function FacultiesInfo() {
 
   return (
     <div className="dashboard">
-      <Drawer variant="permanent" anchor="left">
+      {/* Nút nhỏ ở góc trái dưới cùng, luôn hiển thị */}
+      <Box
+        sx={{
+          position: 'fixed',
+          left: 0,
+          bottom: 24,
+          width: drawerWidth,
+          pointerEvents: 'none',
+          zIndex: 2000,
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+          }}
+        >
+          <IconButton
+            onClick={() => setDrawerOpen(!drawerOpen)}
+            size="small"
+            sx={{
+              width: buttonWidth,
+              height: 36,
+              bgcolor: 'white',
+              border: '1px solid #e0e0e0',
+              boxShadow: 1,
+              transition: 'left 0.2s',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            {drawerOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+          </IconButton>
+        </Box>
+      </Box>
+
+      <Drawer
+        variant="persistent"
+        anchor="left"
+        open={drawerOpen}
+        sx={{
+          width: drawerWidth,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: drawerWidth,
+            boxSizing: 'border-box',
+            transition: 'width 0.2s',
+          },
+        }}
+      >
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 2 }}>
           <img
             src={logo}
@@ -227,7 +284,7 @@ function FacultiesInfo() {
             onClick={() => navigate('/dashboard')}
           />
         </Box>
-        <List>
+        <List sx={{ flexGrow: 1 }}>
           <ListItem button onClick={() => navigate('/dashboard')}>
             <DashboardIcon sx={{ mr: 1 }} />
             <ListItemText primary="Dashboard" />
@@ -236,14 +293,12 @@ function FacultiesInfo() {
             <AccountCircleIcon sx={{ mr: 1 }} />
             <ListItemText primary="Account" />
           </ListItem>
-
           {(user.role === 'Quản trị viên' || user.role === 'Giảng viên' || user.role === 'Chủ nhiệm bộ môn') && (
             <ListItem button onClick={() => navigate('/batches')}>
               <GroupIcon sx={{ mr: 1 }} />
               <ListItemText primary="Danh sách học viên" />
             </ListItem>
           )}
-
           {user.role === 'Quản trị viên' && (
             <>
               <ListItem button onClick={() => navigate('/upload')}>
@@ -262,36 +317,46 @@ function FacultiesInfo() {
                 <AssignmentIcon sx={{ mr: 1 }} />
                 <ListItemText primary="Đề tài chưa được phê duyệt" />
               </ListItem>
+              <ListItem button onClick={() => navigate('/faculties-info')}>
+                <InfoIcon sx={{ mr: 1 }} />
+                <ListItemText primary="Thông tin" />
+              </ListItem>
             </>
           )}
-
           {user.role === 'Sinh viên' && (
             <>
               <ListItem button onClick={() => navigate('/propose-topic')}>
                 <AssignmentIcon sx={{ mr: 1 }} />
                 <ListItemText primary="Đề xuất đề cương" />
               </ListItem>
-              <ListItem button selected>
+              <ListItem button onClick={() => navigate('/faculties-info')}>
                 <InfoIcon sx={{ mr: 1 }} />
                 <ListItemText primary="Thông tin" />
               </ListItem>
+              <ListItem button onClick={() => navigate('/notifications')}>
+                <InfoIcon sx={{ mr: 1 }} />
+                <ListItemText primary="Thông báo" />
+              </ListItem>
             </>
           )}
-
           {user.role === 'Giảng viên' && (
             <ListItem button onClick={() => navigate('/topics')}>
               <AssignmentIcon sx={{ mr: 1 }} />
               <ListItemText primary="Đề xuất từ học viên" />
             </ListItem>
           )}
-
           {user.role === 'Chủ nhiệm bộ môn' && (
             <ListItem button onClick={() => navigate('/head/topics')}>
               <AssignmentIcon sx={{ mr: 1 }} />
               <ListItemText primary="Đề tài chờ phê duyệt" />
             </ListItem>
           )}
-
+          {user.role === 'Chủ nhiệm bộ môn' && (
+            <ListItem button onClick={() => navigate('/head/statistics')}>
+              <GroupIcon sx={{ mr: 1 }} />
+              <ListItemText primary="Thống kê học viên" />
+            </ListItem>
+          )}
           <ListItem button onClick={() => navigate('/calendar')}>
             <CalendarMonthIcon sx={{ mr: 1 }} />
             <ListItemText primary="Calendar" />

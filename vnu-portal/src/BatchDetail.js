@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, CircularProgress, Alert, Drawer, List, ListItem, ListItemText,
-    Button, Toolbar, Chip, TextField, InputAdornment, Grid, IconButton
+    Button, Toolbar, Chip, TextField, InputAdornment, Grid, IconButton, Dialog, DialogTitle, DialogContent,
+    DialogActions
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SearchIcon from '@mui/icons-material/Search';
@@ -21,13 +22,22 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import SettingsIcon from '@mui/icons-material/Settings';
 import HelpIcon from '@mui/icons-material/Help';
 import DownloadIcon from '@mui/icons-material/Download'; // Thêm import
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 function BatchDetail() {
     const { batchId } = useParams();
     const [batchInfo, setBatchInfo] = useState(null);
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [studentForm, setStudentForm] = useState({ studentId: '', fullName: '', birthDate: '', major: '' });
+    const [selectedStudent, setSelectedStudent] = useState(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteOption, setDeleteOption] = useState('batchOnly');
+    const [message, setMessage] = useState({ type: '', text: '' });
     const [searchFilters, setSearchFilters] = useState({
         studentId: '',
         fullName: '',
@@ -37,6 +47,7 @@ function BatchDetail() {
     const [filteredStudents, setFilteredStudents] = useState([]);
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(25);
+    const [error, setError] = useState('');
     const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user')) || {};
 
@@ -130,6 +141,70 @@ function BatchDetail() {
         localStorage.removeItem('user');
         document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
         navigate('/');
+    };
+
+    // Thêm học viên
+    const handleAddStudent = async () => {
+        try {
+            const res = await fetch(`http://localhost:5000/admin/batch/${batchId}/add-student`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(studentForm)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: data.message });
+                setAddDialogOpen(false);
+                fetchBatchDetail();
+            } else {
+                setMessage({ type: 'error', text: data.message });
+            }
+        } catch (e) {
+            setMessage({ type: 'error', text: 'Lỗi khi thêm học viên.' });
+        }
+    };
+
+    // Sửa học viên
+    const handleEditStudent = async () => {
+        try {
+            const res = await fetch(`http://localhost:5000/admin/student/${studentForm.studentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(studentForm)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: data.message });
+                setEditDialogOpen(false);
+                fetchBatchDetail();
+            } else {
+                setMessage({ type: 'error', text: data.message });
+            }
+        } catch (e) {
+            setMessage({ type: 'error', text: 'Lỗi khi sửa học viên.' });
+        }
+    };
+
+    // Xóa học viên
+    const handleDeleteStudent = async () => {
+        try {
+            const res = await fetch(
+                `http://localhost:5000/admin/batch/${batchId}/student/${selectedStudent.studentId}?deleteAccount=${deleteOption === 'deleteAll'}`,
+                { method: 'DELETE', credentials: 'include' }
+            );
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: data.message });
+                setDeleteDialogOpen(false);
+                fetchBatchDetail();
+            } else {
+                setMessage({ type: 'error', text: data.message });
+            }
+        } catch (e) {
+            setMessage({ type: 'error', text: 'Lỗi khi xóa học viên.' });
+        }
     };
 
     return (
@@ -431,6 +506,14 @@ function BatchDetail() {
                                                         }}>
                                                             Ngành học
                                                         </TableCell>
+                                                        <TableCell sx={{
+                                                            fontWeight: 'bold',
+                                                            bgcolor: '#f8f9fa',
+                                                            borderBottom: '2px solid #dee2e6',
+                                                            fontSize: '0.95rem'
+                                                        }}>
+                                                            Hành động
+                                                        </TableCell>
                                                     </TableRow>
                                                 </TableHead>
                                                 <TableBody>
@@ -488,6 +571,16 @@ function BatchDetail() {
                                                                     }}
                                                                 />
                                                             </TableCell>
+                                                            <TableCell sx={{
+                                                                borderBottom: '1px solid #e0e0e0'
+                                                            }}>
+                                                                {user.role === 'Quản trị viên' && (
+                                                                    <>
+                                                                        <IconButton onClick={() => { setStudentForm(student); setEditDialogOpen(true); }}><EditIcon /></IconButton>
+                                                                        <IconButton color="error" onClick={() => { setSelectedStudent(student); setDeleteDialogOpen(true); }}><DeleteIcon /></IconButton>
+                                                                    </>
+                                                                )}
+                                                            </TableCell>
                                                         </TableRow>
                                                     ))}
                                                 </TableBody>
@@ -535,6 +628,16 @@ function BatchDetail() {
                                     </>
                                 )}
                             </Paper>
+                            {user.role === 'Quản trị viên' && (
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AddIcon />}
+                                    sx={{ mb: 2 }}
+                                    onClick={() => { setStudentForm({ studentId: '', fullName: '', birthDate: '', major: '' }); setAddDialogOpen(true); }}
+                                >
+                                    Thêm học viên
+                                </Button>
+                            )}
                             <Button
                                 variant="contained"
                                 color="success"
@@ -546,6 +649,56 @@ function BatchDetail() {
                             </Button>
                         </>
                     )}
+
+                    {/* Dialog thêm học viên */}
+                    <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)}>
+                        <DialogTitle>Thêm học viên mới</DialogTitle>
+                        <DialogContent>
+                            <TextField label="Mã học viên" value={studentForm.studentId} onChange={e => setStudentForm({ ...studentForm, studentId: e.target.value })} fullWidth sx={{ mb: 2 }} />
+                            <TextField label="Họ và tên" value={studentForm.fullName} onChange={e => setStudentForm({ ...studentForm, fullName: e.target.value })} fullWidth sx={{ mb: 2 }} />
+                            <TextField label="Ngày sinh" type="date" value={studentForm.birthDate} onChange={e => setStudentForm({ ...studentForm, birthDate: e.target.value })} fullWidth InputLabelProps={{ shrink: true }} sx={{ mb: 2 }} />
+                            <TextField label="Ngành học" value={studentForm.major} onChange={e => setStudentForm({ ...studentForm, major: e.target.value })} fullWidth sx={{ mb: 2 }} />
+                        </DialogContent>
+                        <DialogActions>
+                            <Button onClick={() => setAddDialogOpen(false)}>Hủy</Button>
+                            <Button onClick={handleAddStudent} variant="contained">Thêm</Button>
+                        </DialogActions>
+                    </Dialog>
+
+                    {/* Dialog sửa học viên */}
+                    <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)}>
+                        <DialogTitle>Sửa thông tin học viên</DialogTitle>
+                        <DialogContent>
+                            <TextField label="Mã học viên" value={studentForm.studentId} disabled fullWidth sx={{ mb: 2 }} />
+                            <TextField label="Họ và tên" value={studentForm.fullName} onChange={e => setStudentForm({ ...studentForm, fullName: e.target.value })} fullWidth sx={{ mb: 2 }} />
+                            <TextField label="Ngày sinh" type="date" value={studentForm.birthDate} onChange={e => setStudentForm({ ...studentForm, birthDate: e.target.value })} fullWidth InputLabelProps={{ shrink: true }} sx={{ mb: 2 }} />
+                            <TextField label="Ngành học" value={studentForm.major} onChange={e => setStudentForm({ ...studentForm, major: e.target.value })} fullWidth sx={{ mb: 2 }} />
+                        </DialogContent>
+                        <DialogActions>
+                            <Button onClick={() => setEditDialogOpen(false)}>Hủy</Button>
+                            <Button onClick={handleEditStudent} variant="contained">Lưu</Button>
+                        </DialogActions>
+                    </Dialog>
+
+                    {/* Dialog xóa học viên */}
+                    <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+                        <DialogTitle>Xóa học viên</DialogTitle>
+                        <DialogContent>
+                            <Typography>Bạn muốn xóa học viên <strong>{selectedStudent?.fullName}</strong>?</Typography>
+                            <Box sx={{ mt: 2 }}>
+                                <Button variant={deleteOption === 'batchOnly' ? 'contained' : 'outlined'} onClick={() => setDeleteOption('batchOnly')} sx={{ mr: 2 }}>
+                                    Chỉ xóa khỏi danh sách đợt
+                                </Button>
+                                <Button variant={deleteOption === 'deleteAll' ? 'contained' : 'outlined'} onClick={() => setDeleteOption('deleteAll')}>
+                                    Xóa khỏi danh sách đợt và xóa tài khoản khỏi hệ thống
+                                </Button>
+                            </Box>
+                        </DialogContent>
+                        <DialogActions>
+                            <Button onClick={() => setDeleteDialogOpen(false)}>Hủy</Button>
+                            <Button onClick={handleDeleteStudent} color="error" variant="contained">Xóa</Button>
+                        </DialogActions>
+                    </Dialog>
                 </Box>
             </div>
         </div>
