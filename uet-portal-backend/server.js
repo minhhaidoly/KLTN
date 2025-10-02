@@ -1150,24 +1150,45 @@ app.get('/faculty/:facultyName/members', authenticateJWT, async (req, res) => {
       managedMajor: facultyName
     }).select('userInfo.fullName userInfo.email managedMajor');
     // Gộp kết quả
+    // const result = [
+    //   ...lecturers.map((l, idx) => ({
+    //     stt: idx + 1,
+    //     fullName: l.userInfo.fullName,
+    //     email: l.userInfo.email,
+    //     department: l.userInfo.department,
+    //     position: l.userInfo.position || '',
+    //     role: 'Giảng viên'
+    //   })),
+    //   ...heads.map((h, idx) => ({
+    //     stt: lecturers.length + idx + 1,
+    //     fullName: h.userInfo.fullName,
+    //     email: h.userInfo.email,
+    //     department: h.managedMajor,
+    //     position: 'Chủ nhiệm bộ môn',
+    //     role: 'Chủ nhiệm bộ môn'
+    //   }))
+    // ];
+
     const result = [
-      ...lecturers.map((l, idx) => ({
-        stt: idx + 1,
-        fullName: l.userInfo.fullName,
-        email: l.userInfo.email,
-        department: l.userInfo.department,
-        position: l.userInfo.position || '',
-        role: 'Giảng viên'
-      })),
-      ...heads.map((h, idx) => ({
-        stt: lecturers.length + idx + 1,
-        fullName: h.userInfo.fullName,
-        email: h.userInfo.email,
-        department: h.managedMajor,
-        position: 'Chủ nhiệm bộ môn',
-        role: 'Chủ nhiệm bộ môn'
-      }))
-    ];
+  ...lecturers.map((l, idx) => ({
+    stt: idx + 1,
+    _id: l._id,  // ✅ Thêm dòng này
+    fullName: l.userInfo.fullName,
+    email: l.userInfo.email,
+    department: l.userInfo.department,
+    position: l.userInfo.position || '',
+    role: 'Giảng viên'
+  })),
+  ...heads.map((h, idx) => ({
+    stt: lecturers.length + idx + 1,
+    _id: h._id,  // ✅ Thêm dòng này
+    fullName: h.userInfo.fullName,
+    email: h.userInfo.email,
+    department: h.managedMajor,
+    position: 'Chủ nhiệm bộ môn',
+    role: 'Chủ nhiệm bộ môn'
+  }))
+];
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
