@@ -385,7 +385,7 @@ function FacultyMembers() {
                         )}
                       </TableRow>
                       {/* Filter row */}
-                      <TableRow>
+                      <TableRow sx={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 22 }}>
                         <TableCell>STT</TableCell>
                         <TableCell>Họ và tên</TableCell>
                         <TableCell>Email</TableCell>
