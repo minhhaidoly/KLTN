@@ -1705,19 +1705,140 @@ app.post('/admin/faculty/:facultyName/add-lecturer', authenticateJWT, async (req
 });
 
 // Sửa thông tin giảng viên
+// 1.
+// app.put('/admin/lecturer/:lecturerId', authenticateJWT, async (req, res) => {
+//   if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+//   const { lecturerId } = req.params;
+//   const { fullName, department, position, faculty } = req.body;
+//   const user = await User.findById(lecturerId);
+//   if (!user || user.role !== 'Giảng viên') return res.status(404).json({ message: 'Không tìm thấy giảng viên' });
+//   if (fullName) user.userInfo.fullName = fullName;
+//   if (department) user.userInfo.department = department;
+//   if (position) user.userInfo.position = position;
+//   if (faculty) user.userInfo.faculty = faculty;
+//   await user.save();
+//   res.json({ message: 'Đã cập nhật thông tin giảng viên', lecturer: user.userInfo });
+// });
+// 2.
 app.put('/admin/lecturer/:lecturerId', authenticateJWT, async (req, res) => {
-  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+  if (req.user.role !== 'Quản trị viên') 
+    return res.status(403).json({ message: 'Không có quyền truy cập' });
+  
   const { lecturerId } = req.params;
-  const { fullName, department, position, faculty } = req.body;
-  const user = await User.findById(lecturerId);
-  if (!user || user.role !== 'Giảng viên') return res.status(404).json({ message: 'Không tìm thấy giảng viên' });
-  if (fullName) user.userInfo.fullName = fullName;
-  if (department) user.userInfo.department = department;
-  if (position) user.userInfo.position = position;
-  if (faculty) user.userInfo.faculty = faculty;
-  await user.save();
-  res.json({ message: 'Đã cập nhật thông tin giảng viên', lecturer: user.userInfo });
+  const { fullName, department, position, faculty, email, role, managedMajor } = req.body;
+  
+  try {
+    const user = await User.findById(lecturerId);
+    if (!user || !['Giảng viên', 'Chủ nhiệm bộ môn'].includes(user.role)) 
+      return res.status(404).json({ message: 'Không tìm thấy giảng viên/CNBM' });
+
+    // 1. Xử lý thay đổi email (username)
+    if (email && email !== user.username) {
+      const existingUser = await User.findOne({ username: email });
+      if (existingUser) {
+        return res.status(400).json({ message: 'Email đã tồn tại trong hệ thống' });
+      }
+      user.username = email;
+      if (user.userInfo) user.userInfo.email = email;
+    }
+
+    // 2. Xử lý thay đổi vai trò
+    if (role && role !== user.role) {
+      // Giảng viên → CNBM
+      if (user.role === 'Giảng viên' && role === 'Chủ nhiệm bộ môn') {
+        if (!managedMajor) {
+          return res.status(400).json({ 
+            message: 'Phải chỉ định ngành quản lý khi chuyển sang CNBM' 
+          });
+        }
+        
+        // Kiểm tra ngành đã có CNBM chưa
+        const existingHead = await User.findOne({
+          role: 'Chủ nhiệm bộ môn',
+          managedMajor: managedMajor,
+          _id: { $ne: lecturerId }
+        });
+        
+        if (existingHead) {
+          return res.status(400).json({
+            message: `Ngành "${managedMajor}" đã có CNBM khác`
+          });
+        }
+        
+        user.role = 'Chủ nhiệm bộ môn';
+        user.managedMajor = managedMajor;
+      } 
+      // CNBM → Giảng viên
+      else if (user.role === 'Chủ nhiệm bộ môn' && role === 'Giảng viên') {
+        // Kiểm tra có đề tài đang chờ duyệt không
+        const pendingTopics = await TopicProposal.countDocuments({
+          headId: user._id,
+          status: 'waiting_head_approval'
+        });
+        
+        if (pendingTopics > 0) {
+          return res.status(400).json({
+            message: `Không thể chuyển về Giảng viên vì còn ${pendingTopics} đề tài đang chờ duyệt`
+          });
+        }
+        
+        user.role = 'Giảng viên';
+        user.managedMajor = undefined;
+        
+        // Chuyển faculty từ managedMajor sang userInfo.faculty
+        if (!faculty && user.managedMajor) {
+          user.userInfo = user.userInfo || {};
+          user.userInfo.faculty = user.managedMajor;
+        }
+      }
+      else {
+        return res.status(400).json({ 
+          message: 'Chỉ hỗ trợ chuyển đổi giữa Giảng viên và CNBM' 
+        });
+      }
+    }
+
+    // 3. Cập nhật các thông tin khác
+    user.userInfo = user.userInfo || {};
+    if (fullName) user.userInfo.fullName = fullName;
+    if (department) user.userInfo.department = department;
+    if (position) user.userInfo.position = position;
+    if (faculty && user.role === 'Giảng viên') user.userInfo.faculty = faculty;
+    
+    // Cập nhật managedMajor cho CNBM (nếu không đổi role nhưng đổi ngành)
+    if (user.role === 'Chủ nhiệm bộ môn' && managedMajor && managedMajor !== user.managedMajor) {
+      const existingHead = await User.findOne({
+        role: 'Chủ nhiệm bộ môn',
+        managedMajor: managedMajor,
+        _id: { $ne: lecturerId }
+      });
+      
+      if (existingHead) {
+        return res.status(400).json({
+          message: `Ngành "${managedMajor}" đã có CNBM khác`
+        });
+      }
+      user.managedMajor = managedMajor;
+    }
+
+    await user.save();
+    
+    res.json({ 
+      message: 'Đã cập nhật thông tin thành công', 
+      user: {
+        id: user._id,
+        username: user.username,
+        role: user.role,
+        userInfo: user.userInfo,
+        managedMajor: user.managedMajor
+      }
+    });
+  } catch (error) {
+    console.error('Error updating lecturer:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
 });
+
 
 // Xóa giảng viên
 app.delete('/admin/lecturer/:lecturerId', authenticateJWT, async (req, res) => {
@@ -1756,17 +1877,25 @@ app.post('/admin/faculty/:facultyName/add-head', authenticateJWT, async (req, re
 });
 
 // Sửa thông tin CNBM
+//1.
+// app.put('/admin/head/:headId', authenticateJWT, async (req, res) => {
+//   if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+//   const { headId } = req.params;
+//   const { fullName, managedMajor, email } = req.body;
+//   const user = await User.findById(headId);
+//   if (!user || user.role !== 'Chủ nhiệm bộ môn') return res.status(404).json({ message: 'Không tìm thấy CNBM' });
+//   if (fullName) user.userInfo.fullName = fullName;
+//   if (email) user.userInfo.email = email;
+//   if (managedMajor) user.managedMajor = managedMajor;
+//   await user.save();
+//   res.json({ message: 'Đã cập nhật thông tin CNBM', head: user.userInfo });
+// });
+//2.
+// Thay thế API sửa CNBM (đã tích hợp vào API trên, nhưng giữ lại để tương thích)
 app.put('/admin/head/:headId', authenticateJWT, async (req, res) => {
-  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
-  const { headId } = req.params;
-  const { fullName, managedMajor, email } = req.body;
-  const user = await User.findById(headId);
-  if (!user || user.role !== 'Chủ nhiệm bộ môn') return res.status(404).json({ message: 'Không tìm thấy CNBM' });
-  if (fullName) user.userInfo.fullName = fullName;
-  if (email) user.userInfo.email = email;
-  if (managedMajor) user.managedMajor = managedMajor;
-  await user.save();
-  res.json({ message: 'Đã cập nhật thông tin CNBM', head: user.userInfo });
+  // Chuyển hướng sang API lecturer vì giờ xử lý chung
+  req.params.lecturerId = req.params.headId;
+  return app._router.handle(req, res);
 });
 
 // Xóa CNBM
