@@ -1651,18 +1651,124 @@ app.post('/admin/batch/:batchId/add-student', authenticateJWT, async (req, res) 
 });
 
 // Sửa thông tin học viên (không sửa mật khẩu)
+// 1.
+// app.put('/admin/student/:studentId', authenticateJWT, async (req, res) => {
+//   if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
+//   const { studentId } = req.params;
+//   const { fullName, birthDate, major } = req.body;
+//   const user = await User.findOne({ username: studentId, role: 'Sinh viên' });
+//   if (!user) return res.status(404).json({ message: 'Không tìm thấy học viên' });
+//   if (fullName) user.studentInfo.fullName = fullName;
+//   if (birthDate) user.studentInfo.birthDate = birthDate;
+//   if (major) user.studentInfo.major = major;
+//   await user.save();
+//   res.json({ message: 'Đã cập nhật thông tin học viên', student: user.studentInfo });
+// });
+// 2.
 app.put('/admin/student/:studentId', authenticateJWT, async (req, res) => {
-  if (req.user.role !== 'Quản trị viên') return res.status(403).json({ message: 'Không có quyền truy cập' });
-  const { studentId } = req.params;
-  const { fullName, birthDate, major } = req.body;
-  const user = await User.findOne({ username: studentId, role: 'Sinh viên' });
-  if (!user) return res.status(404).json({ message: 'Không tìm thấy học viên' });
-  if (fullName) user.studentInfo.fullName = fullName;
-  if (birthDate) user.studentInfo.birthDate = birthDate;
-  if (major) user.studentInfo.major = major;
-  await user.save();
-  res.json({ message: 'Đã cập nhật thông tin học viên', student: user.studentInfo });
+  if (req.user.role !== 'Quản trị viên') {
+    return res.status(403).json({ message: 'Không có quyền truy cập' });
+  }
+
+  const { studentId } = req.params; // Mã học viên cũ
+  const { newStudentId, fullName, birthDate, major } = req.body;
+
+  try {
+    // Tìm user hiện tại
+    const user = await User.findOne({ username: studentId, role: 'Sinh viên' });
+    if (!user) {
+      return res.status(404).json({ message: 'Không tìm thấy học viên' });
+    }
+
+    // Kiểm tra nếu muốn đổi mã học viên (username)
+    if (newStudentId && newStudentId !== studentId) {
+      // Kiểm tra mã học viên mới đã tồn tại chưa
+      const existingUser = await User.findOne({ username: newStudentId });
+      if (existingUser) {
+        return res.status(400).json({ 
+          message: 'Mã học viên mới đã tồn tại trong hệ thống' 
+        });
+      }
+
+      // Cập nhật username
+      user.username = newStudentId;
+      user.studentInfo.studentId = newStudentId;
+
+      // Cập nhật trong tất cả các batch
+      await StudentBatch.updateMany(
+        { 'students.studentId': studentId },
+        { $set: { 'students.$[elem].studentId': newStudentId } },
+        { arrayFilters: [{ 'elem.studentId': studentId }] }
+      );
+
+      // Cập nhật trong TopicProposal nếu có
+      await TopicProposal.updateMany(
+        { studentId: studentId },
+        { $set: { studentId: newStudentId } }
+      );
+    }
+
+    // Cập nhật các thông tin khác
+    if (fullName) {
+      user.studentInfo.fullName = fullName;
+      
+      // Cập nhật trong batch
+      await StudentBatch.updateMany(
+        { 'students.studentId': newStudentId || studentId },
+        { $set: { 'students.$[elem].fullName': fullName } },
+        { arrayFilters: [{ 'elem.studentId': newStudentId || studentId }] }
+      );
+
+      // Cập nhật trong TopicProposal
+      await TopicProposal.updateMany(
+        { studentId: newStudentId || studentId },
+        { $set: { studentName: fullName } }
+      );
+    }
+
+    if (birthDate) {
+      user.studentInfo.birthDate = new Date(birthDate);
+      
+      // Cập nhật trong batch
+      await StudentBatch.updateMany(
+        { 'students.studentId': newStudentId || studentId },
+        { $set: { 'students.$[elem].birthDate': new Date(birthDate) } },
+        { arrayFilters: [{ 'elem.studentId': newStudentId || studentId }] }
+      );
+    }
+
+    if (major) {
+      user.studentInfo.major = major;
+      
+      // Cập nhật trong batch
+      await StudentBatch.updateMany(
+        { 'students.studentId': newStudentId || studentId },
+        { $set: { 'students.$[elem].major': major } },
+        { arrayFilters: [{ 'elem.studentId': newStudentId || studentId }] }
+      );
+    }
+
+    await user.save();
+
+    res.json({ 
+      message: 'Đã cập nhật thông tin học viên thành công', 
+      student: {
+        studentId: user.studentInfo.studentId,
+        fullName: user.studentInfo.fullName,
+        birthDate: user.studentInfo.birthDate,
+        major: user.studentInfo.major
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating student:', error);
+    res.status(500).json({ 
+      message: 'Lỗi server', 
+      error: error.message 
+    });
+  }
 });
+
 
 // Xóa học viên khỏi đợt, có thể xóa cả tài khoản
 app.delete('/admin/batch/:batchId/student/:studentId', authenticateJWT, async (req, res) => {
