@@ -16,6 +16,7 @@ function Notifications() {
 
   return (
     <Box sx={{ p: 3 }}>
+      
       <Typography variant="h4" gutterBottom>
         Thông báo của bạn
       </Typography>

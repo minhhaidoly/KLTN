@@ -50,6 +50,7 @@ function BatchDetail() {
     const [error, setError] = useState('');
     const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user')) || {};
+    const [originalStudentId, setOriginalStudentId] = useState('');
 
     useEffect(() => {
         fetchBatchDetail();
@@ -168,12 +169,25 @@ function BatchDetail() {
     // Sửa học viên
     const handleEditStudent = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/admin/student/${studentForm.studentId}`, {
+            // Chuẩn bị body request
+            const requestBody = {
+                fullName: studentForm.fullName,
+                birthDate: studentForm.birthDate,
+                major: studentForm.major
+            };
+
+            // Nếu mã học viên thay đổi, thêm newStudentId
+            if (studentForm.studentId !== originalStudentId) {
+                requestBody.newStudentId = studentForm.studentId;
+            }
+
+            const res = await fetch(`http://localhost:5000/admin/student/${originalStudentId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify(studentForm)
+                body: JSON.stringify(requestBody)
             });
+
             const data = await res.json();
             if (res.ok) {
                 setMessage({ type: 'success', text: data.message });
@@ -576,7 +590,18 @@ function BatchDetail() {
                                                             }}>
                                                                 {user.role === 'Quản trị viên' && (
                                                                     <>
-                                                                        <IconButton onClick={() => { setStudentForm(student); setEditDialogOpen(true); }}><EditIcon /></IconButton>
+                                                                        <IconButton onClick={() => {
+                                                                            setOriginalStudentId(student.studentId); // Lưu mã gốc
+                                                                            setStudentForm({
+                                                                                studentId: student.studentId,
+                                                                                fullName: student.fullName,
+                                                                                birthDate: student.birthDate ? new Date(student.birthDate).toISOString().split('T')[0] : '',
+                                                                                major: student.major
+                                                                            });
+                                                                            setEditDialogOpen(true);
+                                                                        }}>
+                                                                            <EditIcon />
+                                                                        </IconButton>
                                                                         <IconButton color="error" onClick={() => { setSelectedStudent(student); setDeleteDialogOpen(true); }}><DeleteIcon /></IconButton>
                                                                     </>
                                                                 )}
@@ -628,6 +653,15 @@ function BatchDetail() {
                                     </>
                                 )}
                             </Paper>
+                            {message.text && (
+                                <Alert
+                                    severity={message.type}
+                                    sx={{ mb: 2 }}
+                                    onClose={() => setMessage({ type: '', text: '' })}
+                                >
+                                    {message.text}
+                                </Alert>
+                            )}
                             {user.role === 'Quản trị viên' && (
                                 <Button
                                     variant="contained"
@@ -666,13 +700,42 @@ function BatchDetail() {
                     </Dialog>
 
                     {/* Dialog sửa học viên */}
-                    <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)}>
+                    <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
                         <DialogTitle>Sửa thông tin học viên</DialogTitle>
                         <DialogContent>
-                            <TextField label="Mã học viên" value={studentForm.studentId} disabled fullWidth sx={{ mb: 2 }} />
-                            <TextField label="Họ và tên" value={studentForm.fullName} onChange={e => setStudentForm({ ...studentForm, fullName: e.target.value })} fullWidth sx={{ mb: 2 }} />
-                            <TextField label="Ngày sinh" type="date" value={studentForm.birthDate} onChange={e => setStudentForm({ ...studentForm, birthDate: e.target.value })} fullWidth InputLabelProps={{ shrink: true }} sx={{ mb: 2 }} />
-                            <TextField label="Ngành học" value={studentForm.major} onChange={e => setStudentForm({ ...studentForm, major: e.target.value })} fullWidth sx={{ mb: 2 }} />
+                            <Box sx={{ pt: 2 }}>
+                                <TextField
+                                    label="Mã học viên"
+                                    value={studentForm.studentId}
+                                    onChange={e => setStudentForm({ ...studentForm, studentId: e.target.value })}
+                                    fullWidth
+                                    sx={{ mb: 2 }}
+                                    helperText="Lưu ý: Thay đổi mã học viên sẽ cập nhật username đăng nhập"
+                                />
+                                <TextField
+                                    label="Họ và tên"
+                                    value={studentForm.fullName}
+                                    onChange={e => setStudentForm({ ...studentForm, fullName: e.target.value })}
+                                    fullWidth
+                                    sx={{ mb: 2 }}
+                                />
+                                <TextField
+                                    label="Ngày sinh"
+                                    type="date"
+                                    value={studentForm.birthDate}
+                                    onChange={e => setStudentForm({ ...studentForm, birthDate: e.target.value })}
+                                    fullWidth
+                                    InputLabelProps={{ shrink: true }}
+                                    sx={{ mb: 2 }}
+                                />
+                                <TextField
+                                    label="Ngành học"
+                                    value={studentForm.major}
+                                    onChange={e => setStudentForm({ ...studentForm, major: e.target.value })}
+                                    fullWidth
+                                    sx={{ mb: 2 }}
+                                />
+                            </Box>
                         </DialogContent>
                         <DialogActions>
                             <Button onClick={() => setEditDialogOpen(false)}>Hủy</Button>
