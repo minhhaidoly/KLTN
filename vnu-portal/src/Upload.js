@@ -72,6 +72,7 @@ function Upload() {
 
     const formData = new FormData();
     formData.append('batchName', batchName);
+    formData.append('decision', decision); // Thêm dòng này để truyền quyết định
     formData.append('excelFile', excelFile);
 
     try {
